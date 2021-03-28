@@ -2,6 +2,8 @@ package com.hqu.hquforum.controller;
 
 import com.hqu.hquforum.dto.AccessTokenDTO;
 import com.hqu.hquforum.dto.GithubUser;
+import com.hqu.hquforum.mapper.UserMapper;
+import com.hqu.hquforum.model.User;
 import com.hqu.hquforum.provider.GithubProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import sun.net.httpserver.HttpServerImpl;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.UUID;
 
 /**
  * @author Drf
@@ -29,6 +32,10 @@ public class AuthorizeController {
     @Value("${github.redirect_uri}")
     private String redirectUri;
 
+    @Autowired
+    private UserMapper userMapper;
+
+
     @GetMapping("/callback")
     public String callback(@RequestParam(name ="code") String code,
                            @RequestParam(name = "state") String state,
@@ -39,11 +46,19 @@ public class AuthorizeController {
         accessTokenDTO.setCode(code);
         accessTokenDTO.setState(state);
         String accessToken = githubProvider.getAccessToken(accessTokenDTO);
-        GithubUser user = githubProvider.getUser(accessToken);
-        if (user != null){
-            request.getSession().setAttribute("user",user);
-            return "redirect:/";
+        GithubUser githubUser = githubProvider.getUser(accessToken);
+        if (githubUser != null){
+            User user = new User();
+            user.setToken(UUID.randomUUID().toString());
+            user.setName(githubUser.getName());
+            user.setAccount_id(String.valueOf(githubUser.getId()));
+            user.setGmt_create(System.currentTimeMillis());
+            user.setGmt_modified(user.getGmt_create());
+            userMapper.insert(user);
             //登录成功，写入cookie和session
+            request.getSession().setAttribute("user",githubUser);
+            return "redirect:/";
+
         }else{
             //登陆失败，重新登录
             return "redirect:/";
